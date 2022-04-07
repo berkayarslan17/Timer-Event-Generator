@@ -1,183 +1,204 @@
 #include "timer.h"
 
-my_timer::my_timer()
+my_timer::my_timer() : done(false)
 {
-    std::cout << "Task::Constructor\n";
-    auto timepoint = std::chrono::system_clock::now();
+    std::cout << "my_timer::Constructor\n";
+    auto timepoint = CLOCK::now();
     time_epoch = timepoint.time_since_epoch().count();
-    int divider = pow(10, 6);
+    divider = pow(10, 6);
     runnable = new std::thread(&my_timer::handle_timer_events, this);
 }
 
 my_timer::~my_timer()
 {
-    std::cout << "Task::Destructor\n";
+    std::cout << "my_timer::Destructor\n";
     runnable->join();
 }
 
 void my_timer::register_timer(const timepoint &tp, const timer_callback &cb)
 {
+    std::cout << "Timer Type 1\n";
     // Add to timer handler table with event type
-    std::unique_ptr<timer_member> tim_mem = std::make_unique<timer_member>(tp, cb);
+    // std::unique_ptr<timer_member> tim_mem = std::make_unique<timer_member>(tp, cb);
+    timer_member *tim_mem = new timer_member(tp, cb);
     register_scheduler_table(*tim_mem);
 }
 
 void my_timer::register_timer(const millisecs &period, const timer_callback &cb)
 {
+    std::cout << "Timer Type 2\n";
     // Add to timer handler table with event type
-    std::unique_ptr<timer_member> tim_mem = std::make_unique<timer_member>(period, cb);
+    // std::unique_ptr<timer_member> tim_mem = std::make_unique<timer_member>(period, cb);
+    timer_member *tim_mem = new timer_member(period, cb);
     register_scheduler_table(*tim_mem);
 }
 
 void my_timer::register_timer(const timepoint &tp, const millisecs &period, const timer_callback &cb)
 {
+    std::cout << "Timer Type 3\n";
     // Add to timer handler table with event type
-    std::unique_ptr<timer_member> tim_mem = std::make_unique<timer_member>(tp, period, cb);
+    // std::unique_ptr<timer_member> tim_mem = std::make_unique<timer_member>(tp, period, cb);
+    timer_member *tim_mem = new timer_member(tp, period, cb);
     register_scheduler_table(*tim_mem);
 }
 
 void my_timer::register_timer(const predicate &pred, const millisecs &period, const timer_callback &cb)
 {
+    std::cout << "Timer Type 4\n";
     // Add to timer handler table with event type
-    std::unique_ptr<timer_member> tim_mem = std::make_unique<timer_member>(pred, period, cb);
+    // std::unique_ptr<timer_member> tim_mem = std::make_unique<timer_member>(pred, period, cb);
+    timer_member *tim_mem = new timer_member(pred, period, cb);
     register_scheduler_table(*tim_mem);
 }
 
 // Find the earliest deadline among the timer member variables.
 void my_timer::register_scheduler_table(timer_member &tim_mem)
 {
+    std::cout << "Saving the timer to scheduler\n";
+    compute_deadline(tim_mem);
     schedule_table.push_back(tim_mem);
-    compute_deadline();
+    sort_by_deadline();
 }
 
 // Find the earliest deadline among the timer member variables.
-void my_timer::compute_deadline(void)
+void my_timer::compute_deadline(timer_member &tim_mem)
 {
+    std::cout << "Computing deadline\n";
     // We should save the deadlines related to each specific timer members.
-    for (auto tim_mem = schedule_table.begin(); tim_mem != schedule_table.end(); ++tim_mem)
+    // std::cout << "Trying to take mutex in main thread\n";
+    // std::lock_guard<std::mutex> guard(timer_mutex);
+    // std::cout << "Mutex has been taken from timer thread\n";
+
+    switch (tim_mem.timer_type)
     {
-        std::lock_guard<std::mutex> guard(timer_mutex);
+    case TIMER_TYPE_1:
+    {
+        auto timepoint = tim_mem.get_member_timepoint();
+        auto tp_ms = timepoint.time_since_epoch().count();
+        std::cout << "Computing tp_ms: " << tp_ms << "\n";
+        auto deadline_ms = (tp_ms - time_epoch) / divider;
+        tim_mem.set_member_deadline(deadline_ms);
+        // Save the timer's deadline to a vector
+        std::cout << "tim deadline " << tim_mem.get_member_deadline() << "\n";
+        // Remove the timer from schedule table
+        // schedule_table.erase(tim_mem);
 
-        switch (tim_mem->timer_type)
-        {
-        case TIMER_TYPE_1:
-        {
-            auto timepoint = tim_mem->get_member_timepoint();
-            auto tp_ms = timepoint.time_since_epoch().count();
-            auto deadline_ms = (tp_ms - time_epoch) / divider;
-            // Save the timer's deadline to a vector
-            deadline_table.push_back(std::make_pair(deadline_ms, *tim_mem));
-            // Remove the timer from schedule table
-            schedule_table.erase(tim_mem);
-
-            break;
-        }
-
-        case TIMER_TYPE_2:
-        {
-            auto period = tim_mem->get_member_period();
-            auto deadline_ms = tim_mem->period_cnt * period.count() - time_epoch;
-            // Save the deadline to vector
-            deadline_table.push_back(std::make_pair(deadline_ms, *tim_mem));
-            tim_mem->period_cnt++;
-            // Never remove this timer from table
-            break;
-        }
-
-        case TIMER_TYPE_3:
-        {
-            auto timepoint = tim_mem->get_member_timepoint();
-            auto tp_ms = std::chrono::time_point_cast<millisecs>(timepoint).time_since_epoch().count();
-            auto threshold_ms = tp_ms - time_epoch;
-
-            auto period = tim_mem->get_member_period();
-            auto deadline_ms = tim_mem->period_cnt * period.count() - time_epoch;
-
-            // Check the values' size. If threshold_ms smaller than deadline_ms, remove the timer from table
-            if (threshold_ms < deadline_ms)
-            {
-                // Remove the timer from table
-                schedule_table.erase(tim_mem);
-            }
-
-            else
-            {
-                // Save the deadline to vector
-                deadline_table.push_back(std::make_pair(deadline_ms, *tim_mem));
-                tim_mem->period_cnt++;
-            }
-
-            break;
-        }
-
-        case TIMER_TYPE_4:
-        {
-            auto pred = tim_mem->get_member_predicate();
-            auto period = tim_mem->get_member_period();
-            auto deadline_ms = tim_mem->period_cnt * period.count() - time_epoch;
-            // Check the predicate's value. If it is false, remove the timer from table
-            if (!pred)
-            {
-                // Remove the timer from table
-                schedule_table.erase(tim_mem);
-            }
-            else
-            {
-                // Save the deadline to vector
-                deadline_table.push_back(std::make_pair(deadline_ms, *tim_mem));
-                tim_mem->period_cnt++;
-            }
-
-            break;
-        }
-
-        default:
-            std::cout << "Unknown timer type\n";
-            break;
-        }
+        break;
     }
-    // Sort the deadline vector, return the earliest deadline.
-    std::sort(deadline_table.begin(), deadline_table.end());
+
+    case TIMER_TYPE_2:
+    {
+        auto period = tim_mem.get_member_period();
+        auto deadline_ms = tim_mem.period_cnt * period.count() - time_epoch;
+        std::cout << "Computing deadline: " << deadline_ms << "\n";
+        // Save the deadline to vector
+        tim_mem.set_member_deadline(deadline_ms);
+        tim_mem.period_cnt++;
+        // Never remove this timer from table
+        break;
+    }
+
+    case TIMER_TYPE_3:
+    {
+        auto timepoint = tim_mem.get_member_timepoint();
+        auto tp_ms = std::chrono::time_point_cast<millisecs>(timepoint).time_since_epoch().count();
+        auto threshold_ms = tp_ms - time_epoch;
+        std::cout << "Computing threshold: " << threshold_ms << "\n";
+
+        auto period = tim_mem.get_member_period();
+        auto deadline_ms = tim_mem.period_cnt * period.count() - time_epoch;
+        std::cout << "Computing deadline: " << deadline_ms << "\n";
+
+        // Check the values' size. If threshold_ms smaller than deadline_ms, remove the timer from table
+        if (threshold_ms < deadline_ms)
+        {
+            // Remove the timer from table
+            // schedule_table.erase(tim_mem);
+        }
+
+        else
+        {
+            // Save the deadline to vector
+            tim_mem.set_member_deadline(deadline_ms);
+            tim_mem.period_cnt++;
+        }
+
+        break;
+    }
+
+    case TIMER_TYPE_4:
+    {
+        auto pred = tim_mem.get_member_predicate();
+        auto period = tim_mem.get_member_period();
+        auto deadline_ms = tim_mem.period_cnt * period.count() - time_epoch;
+        std::cout << "Computing deadline: " << deadline_ms << "\n";
+        // Check the predicate's value. If it is false, remove the timer from table
+        if (!pred)
+        {
+            // Remove the timer from table
+            // schedule_table.erase(tim_mem);
+        }
+        else
+        {
+            // Save the deadline to vector
+            tim_mem.set_member_deadline(deadline_ms);
+            tim_mem.period_cnt++;
+        }
+
+        break;
+    }
+
+    default:
+        std::cout << "Unknown timer type\n";
+        break;
+    }
+
+    std::cout << "Deadline computed\n";
 }
 
-double compute_sleep(double &sleep)
+void my_timer::sort_by_deadline(void)
 {
-    static double temp;
-    auto result = sleep - temp;
+    // Sort the deadline vector, return the earliest deadline.
+    if (schedule_table.size() > 1)
+    {
+        std::cout << "Sorting the vector\n";
+        std::sort(schedule_table.begin(), schedule_table.end(), [](timer_member &lhs, timer_member &rhs)
+                  { return lhs.get_member_deadline() < rhs.get_member_deadline(); });
+    }
+}
+
+long long compute_sleep(long long sleep)
+{
+    static long long temp = 0;
+    long long result = sleep - temp;
     temp = sleep;
     return result;
 }
 
-void my_timer::handle_timer_events()
+void my_timer::handle_timer_events(void)
 {
     // This is the scope that schedules the timer callback deadlines
 
-    while (!schedule_table.empty())
+    std::cout << "Hello from timer thread\n";
+    std::unique_lock<std::mutex> lock(timer_mutex);
+    while (!done)
     {
-        // sleep this thread with block_time
-        // TODO: We should not blocking with a constant period.
-        while (!deadline_table.empty())
+        while (!schedule_table.empty())
         {
-            std::lock_guard<std::mutex> guard(timer_mutex);
+            // sleep this thread with block_time
+            // TODO: We should not blocking with a constant period.
+            auto tim_mem = schedule_table.front();
 
-            std::pair<double, timer_member> tim_mem = deadline_table.front();
-            auto deadline = tim_mem.first;
-            auto ms_sleep = compute_sleep(deadline);
+            std::cout << "timer type: " << tim_mem.timer_type << "\n";
+            std::cout << "timer deadline: " << tim_mem.get_member_deadline() << "\n";
+            auto ms_sleep = compute_sleep(tim_mem.get_member_deadline());
+            std::cout << "ms_sleep: " << ms_sleep << "\n";
+            // Sleep the thread with short interval and check out whether the timer queue changes or not.
             std::chrono::duration<double, std::milli> sleep(ms_sleep);
 
             std::this_thread::sleep_for(sleep);
             // Trigger the callback function
-            auto callback = tim_mem.second.get_member_cb();
-            callback();
-            auto find_member = std::find_if(deadline_table.begin(), deadline_table.end(),
-                                            [&tim_mem](const std::pair<double, timer_member> &element)
-                                            {
-                                                if ((element.first == tim_mem.first) && (element.second == tim_mem.second))
-                                                {
-                                                    return element;
-                                                }
-                                            });
-            deadline_table.erase(find_member);
+            tim_mem.get_member_cb()();
         }
     }
 }
@@ -189,7 +210,6 @@ timer_member::timer_member(const timepoint &tp, const timer_callback &cb)
 
     timer_type = TIMER_TYPE_1;
     period_cnt = 0;
-    deadline = 0;
 }
 
 timer_member::timer_member(const millisecs &period, const timer_callback &cb)
@@ -199,7 +219,6 @@ timer_member::timer_member(const millisecs &period, const timer_callback &cb)
 
     timer_type = TIMER_TYPE_2;
     period_cnt = 0;
-    deadline = 0;
 }
 
 timer_member::timer_member(const timepoint &tp, const millisecs &period, const timer_callback &cb)
@@ -210,7 +229,6 @@ timer_member::timer_member(const timepoint &tp, const millisecs &period, const t
 
     timer_type = TIMER_TYPE_3;
     period_cnt = 0;
-    deadline = 0;
 }
 
 timer_member::timer_member(const predicate &pred, const millisecs &period, const timer_callback &cb)
@@ -221,16 +239,22 @@ timer_member::timer_member(const predicate &pred, const millisecs &period, const
 
     timer_type = TIMER_TYPE_4;
     period_cnt = 0;
-    deadline = 0;
 }
 
 timer_member::~timer_member()
 {
 }
 
-bool timer_member::operator==(const timer_member &tim_mem) const
+timer_member &timer_member::operator=(const timer_member &tim_mem)
 {
-    return *this == tim_mem;
+    period_cnt = tim_mem.period_cnt;
+    timer_type = tim_mem.timer_type;
+    set_member_period(tim_mem.mem_period);
+    set_member_cb(tim_mem.mem_cb);
+    set_member_predicate(tim_mem.mem_pred);
+    set_member_timepoint(tim_mem.mem_tp);
+    set_member_deadline(tim_mem.mem_deadline);
+    return *this;
 }
 
 void timer_member::set_member_period(const millisecs &period)
@@ -253,6 +277,11 @@ void timer_member::set_member_timepoint(const timepoint &tp)
     mem_tp = tp;
 }
 
+void timer_member::set_member_deadline(const long long &deadline)
+{
+    mem_deadline = deadline;
+}
+
 millisecs timer_member::get_member_period()
 {
     return mem_period;
@@ -271,4 +300,9 @@ predicate timer_member::get_member_predicate()
 timepoint timer_member::get_member_timepoint()
 {
     return mem_tp;
+}
+
+long long timer_member::get_member_deadline()
+{
+    return mem_deadline;
 }
