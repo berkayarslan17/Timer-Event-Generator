@@ -2,13 +2,15 @@
 #define _TIMER_H
 
 #include <iostream>
+#include <cmath>
 #include <chrono>
 #include <vector>
+#include <mutex>
 #include <thread>
-#include <map>
 #include <functional>
 #include <algorithm>
 
+extern std::mutex timer_mutex;
 using CLOCK = std::chrono::high_resolution_clock;
 using timer_callback = std::function<void()>;
 using millisecs = std::chrono::milliseconds;
@@ -52,6 +54,7 @@ private:
     std::vector<std::pair<double, timer_member>> deadline_table;
     std::thread *runnable;
     double time_epoch;
+    int divider;
 };
 
 class timer_member
@@ -62,6 +65,7 @@ public:
     timer_member(const timepoint &tp, const millisecs &period, const timer_callback &cb);
     timer_member(const predicate &pred, const millisecs &period, const timer_callback &cb);
     ~timer_member();
+    bool operator==(const timer_member &tim_mem) const;
     void set_member_period(const millisecs &period);
     void set_member_cb(const timer_callback &cb);
     void set_member_predicate(const predicate &pred);

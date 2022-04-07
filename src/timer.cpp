@@ -5,6 +5,7 @@ my_timer::my_timer()
     std::cout << "Task::Constructor\n";
     auto timepoint = std::chrono::system_clock::now();
     time_epoch = timepoint.time_since_epoch().count();
+    int divider = pow(10, 6);
     runnable = new std::thread(&my_timer::handle_timer_events, this);
 }
 
@@ -46,6 +47,7 @@ void my_timer::register_timer(const predicate &pred, const millisecs &period, co
 void my_timer::register_scheduler_table(timer_member &tim_mem)
 {
     schedule_table.push_back(tim_mem);
+    compute_deadline();
 }
 
 // Find the earliest deadline among the timer member variables.
@@ -54,13 +56,15 @@ void my_timer::compute_deadline(void)
     // We should save the deadlines related to each specific timer members.
     for (auto tim_mem = schedule_table.begin(); tim_mem != schedule_table.end(); ++tim_mem)
     {
+        std::lock_guard<std::mutex> guard(timer_mutex);
+
         switch (tim_mem->timer_type)
         {
         case TIMER_TYPE_1:
         {
             auto timepoint = tim_mem->get_member_timepoint();
-            auto tp_ms = std::chrono::time_point_cast<millisecs>(timepoint).time_since_epoch().count();
-            auto deadline_ms = tp_ms - time_epoch;
+            auto tp_ms = timepoint.time_since_epoch().count();
+            auto deadline_ms = (tp_ms - time_epoch) / divider;
             // Save the timer's deadline to a vector
             deadline_table.push_back(std::make_pair(deadline_ms, *tim_mem));
             // Remove the timer from schedule table
@@ -154,17 +158,27 @@ void my_timer::handle_timer_events()
         // TODO: We should not blocking with a constant period.
         while (!deadline_table.empty())
         {
-            auto data = deadline_table.front();
-            auto deadline = data.first;
+            std::lock_guard<std::mutex> guard(timer_mutex);
+
+            std::pair<double, timer_member> tim_mem = deadline_table.front();
+            auto deadline = tim_mem.first;
             auto ms_sleep = compute_sleep(deadline);
             std::chrono::duration<double, std::milli> sleep(ms_sleep);
+
             std::this_thread::sleep_for(sleep);
             // Trigger the callback function
-            auto callback = data.second.get_member_cb();
+            auto callback = tim_mem.second.get_member_cb();
             callback();
-            deadline_table.erase(deadline_table.begin());
+            auto find_member = std::find_if(deadline_table.begin(), deadline_table.end(),
+                                            [&tim_mem](const std::pair<double, timer_member> &element)
+                                            {
+                                                if ((element.first == tim_mem.first) && (element.second == tim_mem.second))
+                                                {
+                                                    return element;
+                                                }
+                                            });
+            deadline_table.erase(find_member);
         }
-        compute_deadline();
     }
 }
 
@@ -212,6 +226,11 @@ timer_member::timer_member(const predicate &pred, const millisecs &period, const
 
 timer_member::~timer_member()
 {
+}
+
+bool timer_member::operator==(const timer_member &tim_mem) const
+{
+    return *this == tim_mem;
 }
 
 void timer_member::set_member_period(const millisecs &period)
