@@ -1,10 +1,10 @@
 #include "timer.h"
 
-my_timer::my_timer() : done(false)
+my_timer::my_timer() : done(false), ready(false)
 {
     std::cout << "my_timer::Constructor\n";
-    auto timepoint = CLOCK::now();
-    time_epoch = timepoint.time_since_epoch().count();
+    time_now = CLOCK::now();
+    time_epoch = time_now.time_since_epoch().count();
     divider = pow(10, 6);
     runnable = new std::thread(&my_timer::handle_timer_events, this);
 }
@@ -56,6 +56,7 @@ void my_timer::register_scheduler_table(timer_member &tim_mem)
 {
     std::cout << "Saving the timer to scheduler\n";
     compute_deadline(tim_mem);
+    std::lock_guard<std::mutex> lock(timer_mutex);
     schedule_table.push_back(tim_mem);
     sort_by_deadline();
 }
@@ -80,8 +81,7 @@ void my_timer::compute_deadline(timer_member &tim_mem)
         tim_mem.set_member_deadline(deadline_ms);
         // Save the timer's deadline to a vector
         std::cout << "tim deadline " << tim_mem.get_member_deadline() << "\n";
-        // Remove the timer from schedule table
-        // schedule_table.erase(tim_mem);
+        timer_sem.give();
 
         break;
     }
@@ -100,28 +100,13 @@ void my_timer::compute_deadline(timer_member &tim_mem)
 
     case TIMER_TYPE_3:
     {
-        auto timepoint = tim_mem.get_member_timepoint();
-        auto tp_ms = std::chrono::time_point_cast<millisecs>(timepoint).time_since_epoch().count();
-        auto threshold_ms = tp_ms - time_epoch;
-        std::cout << "Computing threshold: " << threshold_ms << "\n";
-
         auto period = tim_mem.get_member_period();
         auto deadline_ms = tim_mem.period_cnt * period.count() - time_epoch;
         std::cout << "Computing deadline: " << deadline_ms << "\n";
 
-        // Check the values' size. If threshold_ms smaller than deadline_ms, remove the timer from table
-        if (threshold_ms < deadline_ms)
-        {
-            // Remove the timer from table
-            // schedule_table.erase(tim_mem);
-        }
-
-        else
-        {
-            // Save the deadline to vector
-            tim_mem.set_member_deadline(deadline_ms);
-            tim_mem.period_cnt++;
-        }
+        // Save the deadline to vector
+        tim_mem.set_member_deadline(deadline_ms);
+        tim_mem.period_cnt++;
 
         break;
     }
@@ -167,38 +152,122 @@ void my_timer::sort_by_deadline(void)
     }
 }
 
-long long compute_sleep(long long sleep)
+long long compute_sleep(long long sleep, long long time_past)
 {
-    static long long temp = 0;
-    long long result = sleep - temp;
-    temp = sleep;
+    long long result = sleep - time_past;
     return result;
+}
+
+void my_timer::decide_to_remove(void)
+{
+    auto tim_mem = schedule_table.begin();
+    switch (tim_mem->timer_type)
+    {
+    case TIMER_TYPE_1:
+    {
+        // Remove the timer from schedule table
+        schedule_table.erase(schedule_table.begin());
+        break;
+    }
+
+    case TIMER_TYPE_2:
+    {
+        // Never remove this timer from table
+        // Give semaphore for triggering thread again
+        timer_sem.give();
+        break;
+    }
+
+    case TIMER_TYPE_3:
+    {
+
+        auto timepoint = tim_mem->get_member_timepoint();
+        auto tp_ms = timepoint.time_since_epoch().count();
+        auto threshold_ms = (tp_ms - time_epoch) / divider;
+        auto deadline_ms = tim_mem->get_member_deadline();
+        ;
+        std::cout << "Computing threshold: " << threshold_ms << "\n";
+
+        // Check the values' size. If threshold_ms smaller than deadline_ms, remove the timer from table
+        if (threshold_ms < deadline_ms)
+        {
+            // Remove the timer from table
+            schedule_table.erase(schedule_table.begin());
+        }
+
+        break;
+    }
+
+    case TIMER_TYPE_4:
+    {
+        auto pred = tim_mem->get_member_predicate();
+        // Check the predicate's value. If it is false, remove the timer from table
+        if (!pred)
+        {
+            // Remove the timer from table
+            schedule_table.erase(schedule_table.begin());
+        }
+
+        break;
+    }
+
+    default:
+        std::cout << "Unknown timer type\n";
+        break;
+    }
+}
+
+long long my_timer::determine_time(long long time)
+{
+    return (time - time_epoch) / divider;
 }
 
 void my_timer::handle_timer_events(void)
 {
     // This is the scope that schedules the timer callback deadlines
+    long long time_past = 0;
 
     std::cout << "Hello from timer thread\n";
-    std::unique_lock<std::mutex> lock(timer_mutex);
     while (!done)
     {
         while (!schedule_table.empty())
         {
-            // sleep this thread with block_time
-            // TODO: We should not blocking with a constant period.
-            auto tim_mem = schedule_table.front();
-
-            std::cout << "timer type: " << tim_mem.timer_type << "\n";
-            std::cout << "timer deadline: " << tim_mem.get_member_deadline() << "\n";
-            auto ms_sleep = compute_sleep(tim_mem.get_member_deadline());
-            std::cout << "ms_sleep: " << ms_sleep << "\n";
+            timer_sem.take();
+            timer_member tim_mem = schedule_table.front();
+            // Wait for signals that will indicate the timer members are ready.
+            // tim_mem.timer_sem.take();
+            auto ms_sleep = compute_sleep(tim_mem.get_member_deadline(), time_past);
             // Sleep the thread with short interval and check out whether the timer queue changes or not.
-            std::chrono::duration<double, std::milli> sleep(ms_sleep);
+            std::chrono::duration<double, std::milli> sleep(ms_sleep / SLEEP_CNT);
 
-            std::this_thread::sleep_for(sleep);
-            // Trigger the callback function
-            tim_mem.get_member_cb()();
+            for (size_t i = 1; i <= SLEEP_CNT; i++)
+            {
+                std::cout << "What's happening to i?: " << i << "\n";
+                // get size of the timer queue
+                auto old_size = schedule_table.size();
+                std::cout << "Old size: " << old_size << "\n";
+                std::this_thread::sleep_for(sleep);
+                auto new_size = schedule_table.size();
+                std::cout << "New size: " << new_size << "\n";
+
+                // check the queue whether it is changed or not.
+                if (old_size != new_size)
+                {
+                    std::cout << "Registered new timer...\n";
+                    time_past = sleep.count() * i;
+                    std::cout << "Time past: " << time_past << "\n";
+                    timer_sem.give();
+                    break;
+                }
+
+                if (i == SLEEP_CNT)
+                {
+                    // Trigger the callback function
+                    tim_mem.get_member_cb()();
+                    std::lock_guard<std::mutex> lock(timer_mutex);
+                    decide_to_remove();
+                }
+            }
         }
     }
 }

@@ -36,9 +36,10 @@ int main()
     auto t1 = CLOCK::now() + std::chrono::seconds(1);
     auto t2 = t1 + std::chrono::seconds(1);
 
-    timer.register_timer(t1, [&]()
-                         { log_callback(1, "callback str"); });
     timer.register_timer(t2, [&]()
+                         { log_callback(1, "callback str"); });
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    timer.register_timer(t1, [&]()
                          { log_callback(2, "callback str"); });
     // timer.register_timer(
     //     t1 + millisecs(300), millisecs(500), [&]()

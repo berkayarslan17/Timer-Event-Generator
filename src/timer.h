@@ -11,6 +11,8 @@
 #include <algorithm>
 #include <condition_variable>
 
+#define SLEEP_CNT 10
+
 using CLOCK = std::chrono::high_resolution_clock;
 using timer_callback = std::function<void()>;
 using millisecs = std::chrono::milliseconds;
@@ -24,6 +26,40 @@ typedef enum timer_type
     TIMER_TYPE_3,
     TIMER_TYPE_4,
 } timer_type_t;
+
+class semaphore
+{
+    std::mutex mutex_;
+    std::condition_variable condition_;
+    unsigned long count_ = 0; // Initialized as locked.
+
+public:
+    void give()
+    {
+        std::lock_guard<decltype(mutex_)> lock(mutex_);
+        ++count_;
+        condition_.notify_one();
+    }
+
+    void take()
+    {
+        std::unique_lock<decltype(mutex_)> lock(mutex_);
+        while (!count_) // Handle spurious wake-ups.
+            condition_.wait(lock);
+        --count_;
+    }
+
+    bool try_take()
+    {
+        std::lock_guard<decltype(mutex_)> lock(mutex_);
+        if (count_)
+        {
+            --count_;
+            return true;
+        }
+        return false;
+    }
+};
 
 class timer_member
 {
@@ -80,14 +116,19 @@ public:
     void register_scheduler_table(timer_member &tim_mem);
     void compute_deadline(timer_member &tim_mem);
     void sort_by_deadline(void);
+    long long determine_time(long long time);
+    void decide_to_remove(void);
     void handle_timer_events(void);
 
 private:
     std::vector<timer_member> schedule_table;
     std::mutex timer_mutex;
     std::condition_variable timer_cv;
+    semaphore timer_sem;
     std::thread *runnable;
     std::atomic<bool> done;
+    timepoint time_now;
+    bool ready;
     long long time_epoch;
     long long divider;
 };
