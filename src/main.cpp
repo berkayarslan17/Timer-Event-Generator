@@ -66,5 +66,6 @@ int main()
                          millisecs(500), [&]()
                          { log_callback(7, "callback str"); });
 
+    std::this_thread::sleep_for(std::chrono::seconds(10));
     return 0;
 }
