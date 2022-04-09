@@ -2,7 +2,7 @@
 
 my_timer::my_timer() : done(false), ready(false)
 {
-    std::cout << "my_timer::Constructor\n";
+    // std::cout << "my_timer::Constructor\n";
     time_now = CLOCK::now();
     time_epoch = time_now.time_since_epoch().count();
     divider = pow(10, 6);
@@ -11,13 +11,13 @@ my_timer::my_timer() : done(false), ready(false)
 
 my_timer::~my_timer()
 {
-    std::cout << "my_timer::Destructor\n";
+    // std::cout << "my_timer::Destructor\n";
     runnable->join();
 }
 
 void my_timer::register_timer(const timepoint &tp, const timer_callback &cb)
 {
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    std::this_thread::sleep_for(std::chrono::milliseconds(DELAY_DEBT));
     // Add to timer handler table with event type
     // std::unique_ptr<timer_member> tim_mem = std::make_unique<timer_member>(tp, cb);
     timer_member *tim_mem = new timer_member(tp, cb);
@@ -26,8 +26,8 @@ void my_timer::register_timer(const timepoint &tp, const timer_callback &cb)
 
 void my_timer::register_timer(const millisecs &period, const timer_callback &cb)
 {
-    std::cout << "Timer Type 2\n";
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    // std::cout << "Timer Type 2\n";
+    std::this_thread::sleep_for(std::chrono::milliseconds(DELAY_DEBT));
     // Add to timer handler table with event type
     // std::unique_ptr<timer_member> tim_mem = std::make_unique<timer_member>(period, cb);
     timer_member *tim_mem = new timer_member(period, cb);
@@ -36,8 +36,8 @@ void my_timer::register_timer(const millisecs &period, const timer_callback &cb)
 
 void my_timer::register_timer(const timepoint &tp, const millisecs &period, const timer_callback &cb)
 {
-    std::cout << "Timer Type 3\n";
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    // std::cout << "Timer Type 3\n";
+    std::this_thread::sleep_for(std::chrono::milliseconds(DELAY_DEBT));
     // Add to timer handler table with event type
     // std::unique_ptr<timer_member> tim_mem = std::make_unique<timer_member>(tp, period, cb);
     timer_member *tim_mem = new timer_member(tp, period, cb);
@@ -46,8 +46,8 @@ void my_timer::register_timer(const timepoint &tp, const millisecs &period, cons
 
 void my_timer::register_timer(const predicate &pred, const millisecs &period, const timer_callback &cb)
 {
-    std::cout << "Timer Type 4\n";
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    // std::cout << "Timer Type 4\n";
+    std::this_thread::sleep_for(std::chrono::milliseconds(DELAY_DEBT));
     // Add to timer handler table with event type
     // std::unique_ptr<timer_member> tim_mem = std::make_unique<timer_member>(pred, period, cb);
     timer_member *tim_mem = new timer_member(pred, period, cb);
@@ -110,27 +110,18 @@ void my_timer::compute_deadline(timer_member &tim_mem)
 
     case TIMER_TYPE_4:
     {
-        auto pred = tim_mem.get_member_predicate();
         auto period = tim_mem.get_member_period();
-        auto deadline_ms = tim_mem.period_cnt * period.count() - time_epoch;
+        auto deadline_ms = tim_mem.period_cnt * period.count();
         // Check the predicate's value. If it is false, remove the timer from table
-        if (!pred)
-        {
-            // Remove the timer from table
-            // schedule_table.erase(tim_mem);
-        }
-        else
-        {
-            // Save the deadline to vector
-            tim_mem.set_member_deadline(deadline_ms);
-            tim_mem.period_cnt++;
-        }
+        // Save the deadline to vector
+        tim_mem.set_member_deadline(deadline_ms);
+        timer_sem.give();
 
         break;
     }
 
     default:
-        std::cout << "Unknown timer type\n";
+        // std::cout << "Unknown timer type\n";
         break;
     }
 }
@@ -183,12 +174,12 @@ void my_timer::decide_timers_attitude(void)
         auto timepoint = tim_mem->get_member_timepoint();
         auto tp_ms = timepoint.time_since_epoch().count();
         auto threshold_ms = (tp_ms - time_epoch) / divider;
-        std::cout << "threshold_ms: " << threshold_ms << "\n";
+        // std::cout << "threshold_ms: " << threshold_ms << "\n";
         auto period = tim_mem->get_member_period();
         tim_mem->period_cnt++;
         auto deadline_ms = tim_mem->period_cnt * period.count();
         tim_mem->set_member_deadline(deadline_ms);
-        std::cout << "deadline_ms: " << deadline_ms << "\n";
+        // std::cout << "deadline_ms: " << deadline_ms << "\n";
 
         // Check the values' size. If threshold_ms smaller than deadline_ms, remove the timer from table
         if (threshold_ms <= deadline_ms)
@@ -208,32 +199,39 @@ void my_timer::decide_timers_attitude(void)
     {
         auto pred = tim_mem->get_member_predicate();
         // Check the predicate's value. If it is false, remove the timer from table
-        if (!pred)
+        if (!pred())
         {
+            // std::cout << "pred returned false\n";
             // Remove the timer from table
             schedule_table.erase(schedule_table.begin());
+        }
+
+        else
+        {
+            auto period = tim_mem->get_member_period();
+            tim_mem->period_cnt++;
+            auto deadline_ms = tim_mem->period_cnt * period.count();
+            tim_mem->set_member_deadline(deadline_ms);
+            // std::cout << "deadline_ms: " << deadline_ms << "\n";
+            // std::cout << "pred returned true\n";
+            timer_sem.give();
         }
 
         break;
     }
 
     default:
-        std::cout << "Unknown timer type\n";
+        // std::cout << "Unknown timer type\n";
         break;
     }
-}
-
-long long my_timer::determine_time(long long time)
-{
-    return (time - time_epoch) / divider;
 }
 
 void my_timer::handle_timer_events(void)
 {
     // This is the scope that schedules the timer callback deadlines
-    long long time_past = 0;
+    long long time_past = DELAY_DEBT;
 
-    std::cout << "Hello from timer thread\n";
+    // std::cout << "Hello from timer thread\n";
     while (!done)
     {
         while (!schedule_table.empty())
@@ -242,7 +240,9 @@ void my_timer::handle_timer_events(void)
             timer_member tim_mem = schedule_table.front();
             // Wait for signals that will indicate the timer members are ready.
             // tim_mem.timer_sem.take();
+            // std::cout << "gelen deadline " << tim_mem.get_member_deadline()<< "\n";
             auto ms_sleep = compute_sleep(tim_mem.get_member_deadline(), time_past);
+            // std::cout << "ms_sleep: " << ms_sleep << "\n";
             // Sleep the thread with short interval and check out whether the timer queue changes or not.
             std::chrono::duration<double, std::milli> sleep(ms_sleep / SLEEP_CNT);
 
@@ -252,6 +252,7 @@ void my_timer::handle_timer_events(void)
                 // get size of the timer queue
                 auto old_size = schedule_table.size();
                 std::this_thread::sleep_for(sleep);
+                // std::cout << "sleep: " << sleep.count() << "\n";
                 auto new_size = schedule_table.size();
 
                 // check the queue whether it is changed or not.
