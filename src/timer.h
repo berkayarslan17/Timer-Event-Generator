@@ -70,7 +70,6 @@ public:
     timer_member(const timepoint &tp, const millisecs &period, const timer_callback &cb);
     timer_member(const predicate &pred, const millisecs &period, const timer_callback &cb);
     ~timer_member();
-    timer_member &operator=(const timer_member &tim_mem);
     void set_member_period(const millisecs &period);
     void set_member_cb(const timer_callback &cb);
     void set_member_predicate(const predicate &pred);
@@ -117,7 +116,7 @@ public:
     void compute_deadline(timer_member &tim_mem);
     void sort_by_deadline(void);
     long long determine_time(long long time);
-    void decide_to_remove(void);
+    void decide_timers_attitude(void);
     void handle_timer_events(void);
 
 private:
