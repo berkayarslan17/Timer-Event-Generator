@@ -40,32 +40,31 @@ int main()
 
     /* TIMER TYPE 1 */
 
-    // timer.register_timer(t2, [&]()
-    //                      { log_callback(1, "callback str"); });
-    // timer.register_timer(t1, [&]()
-    //                      { log_callback(2, "callback str"); });
-    // timer.register_timer(t3, [&]()
-    //                      { log_callback(3, "callback str"); });
-    // timer.register_timer(t4, [&]()
-    //                      { log_callback(1, "callback str"); });
+    timer.register_timer(t2, [&]()
+                         { log_callback(1, "callback str"); });
+    timer.register_timer(t1, [&]()
+                         { log_callback(2, "callback str"); });
+    timer.register_timer(t3, [&]()
+                         { log_callback(3, "callback str"); });
+    timer.register_timer(t4, [&]()
+                         { log_callback(4, "callback str"); });
 
     /* TIMER TYPE 2 */
 
-    // timer.register_timer(millisecs(1000), [&]()
-    //                      { log_callback(2, "callback str"); });
+    timer.register_timer(millisecs(1000), [&]()
+                         { log_callback(5, "callback str"); });
 
     /* TIMER TYPE 3 */
 
-    // timer.register_timer(t1, millisecs(100), [&]()
-    //                      { log_callback(4, "callback str"); });
+    timer.register_timer(t1, millisecs(1000), [&]()
+                         { log_callback(6, "callback str"); });
 
     /* TIMER TYPE 4 */
 
     timer.register_timer([&]()
                          {static int count = 0; return ++count < 3; },
                          millisecs(500), [&]()
-                         { log_callback(5, "callback str"); });
+                         { log_callback(7, "callback str"); });
 
-    std::this_thread::sleep_for(std::chrono::seconds(5));
     return 0;
 }
