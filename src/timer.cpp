@@ -88,7 +88,7 @@ void my_timer::compute_deadline(timer_member &tim_mem)
     case TIMER_TYPE_2:
     {
         auto period = tim_mem.get_member_period();
-        auto deadline_ms = (period.count() - time_epoch) / divider;
+        auto deadline_ms = tim_mem.period_cnt * period.count();
         // Save the deadline to vector
         tim_mem.set_member_deadline(deadline_ms);
         // Never remove this timer from table
@@ -159,10 +159,10 @@ void my_timer::decide_timers_attitude(void)
         // Never remove this timer from table
         // Give semaphore for triggering thread again
         auto period = tim_mem->get_member_period();
-        auto deadline_ms = tim_mem->period_cnt * period.count() - time_epoch;
+        tim_mem->period_cnt++;
+        auto deadline_ms = tim_mem->period_cnt * period.count();
         // Save the deadline to vector
         tim_mem->set_member_deadline(deadline_ms);
-        tim_mem->period_cnt++;
         // Never remove this timer from table
         timer_sem.give();
         break;
@@ -258,7 +258,7 @@ void my_timer::handle_timer_events(void)
                 // check the queue whether it is changed or not.
                 if (old_size != new_size)
                 {
-                    time_past = sleep.count() * i;
+                    time_past += sleep.count() * i;
                     timer_sem.give();
                     break;
                 }
@@ -270,6 +270,7 @@ void my_timer::handle_timer_events(void)
                     tim_mem.get_member_cb()();
                     std::lock_guard<std::mutex> lock(timer_mutex);
                     decide_timers_attitude();
+                    sort_by_deadline();
                 }
             }
         }
