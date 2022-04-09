@@ -56,16 +56,16 @@ int main()
 
     /* TIMER TYPE 3 */
 
-    timer.register_timer(t1, millisecs(100), [&]()
-                         { log_callback(4, "callback str"); });
+    // timer.register_timer(t1, millisecs(100), [&]()
+    //                      { log_callback(4, "callback str"); });
 
     /* TIMER TYPE 4 */
 
-    // timer.register_timer([&]()
-    //                      {static int count = 0; return ++count < 3; },
-    //                      millisecs(500), [&]()
-    //                      { log_callback(5, "callback str"); });
+    timer.register_timer([&]()
+                         {static int count = 0; return ++count < 3; },
+                         millisecs(500), [&]()
+                         { log_callback(5, "callback str"); });
 
-    std::this_thread::sleep_for(std::chrono::seconds(10));
+    std::this_thread::sleep_for(std::chrono::seconds(5));
     return 0;
 }
