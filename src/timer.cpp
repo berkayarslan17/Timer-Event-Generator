@@ -2,7 +2,7 @@
 
 my_timer::my_timer() : done(false), ready(false)
 {
-    // std::cout << "my_timer::Constructor\n";
+    std::cout << "my_timer::Constructor\n";
     time_now = CLOCK::now();
     time_epoch = time_now.time_since_epoch().count();
     divider = pow(10, 6);
@@ -11,7 +11,9 @@ my_timer::my_timer() : done(false), ready(false)
 
 my_timer::~my_timer()
 {
-    // std::cout << "my_timer::Destructor\n";
+    std::cout << "my_timer::Destructor\n";
+    done = true;
+    schedule_table.clear();
     runnable->join();
 }
 
