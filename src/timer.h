@@ -122,7 +122,6 @@ public:
 private:
     std::vector<timer_member> schedule_table;
     std::mutex timer_mutex;
-    std::condition_variable timer_cv;
     semaphore timer_sem;
     std::thread *runnable;
     std::atomic<bool> done;
