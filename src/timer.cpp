@@ -21,38 +21,35 @@ void my_timer::register_timer(const timepoint &tp, const timer_callback &cb)
 {
     std::this_thread::sleep_for(std::chrono::milliseconds(DELAY_DEBT));
     // Add to timer handler table with event type
-    // std::unique_ptr<timer_member> tim_mem = std::make_unique<timer_member>(tp, cb);
-    timer_member *tim_mem = new timer_member(tp, cb);
+    std::unique_ptr<timer_member> tim_mem = std::make_unique<timer_member>(tp, cb);
+    // timer_member *tim_mem = new timer_member(tp, cb);
     register_scheduler_table(*tim_mem);
 }
 
 void my_timer::register_timer(const millisecs &period, const timer_callback &cb)
 {
-    // std::cout << "Timer Type 2\n";
     std::this_thread::sleep_for(std::chrono::milliseconds(DELAY_DEBT));
     // Add to timer handler table with event type
-    // std::unique_ptr<timer_member> tim_mem = std::make_unique<timer_member>(period, cb);
-    timer_member *tim_mem = new timer_member(period, cb);
+    std::unique_ptr<timer_member> tim_mem = std::make_unique<timer_member>(period, cb);
+    // timer_member *tim_mem = new timer_member(period, cb);
     register_scheduler_table(*tim_mem);
 }
 
 void my_timer::register_timer(const timepoint &tp, const millisecs &period, const timer_callback &cb)
 {
-    // std::cout << "Timer Type 3\n";
     std::this_thread::sleep_for(std::chrono::milliseconds(DELAY_DEBT));
     // Add to timer handler table with event type
-    // std::unique_ptr<timer_member> tim_mem = std::make_unique<timer_member>(tp, period, cb);
-    timer_member *tim_mem = new timer_member(tp, period, cb);
+    std::unique_ptr<timer_member> tim_mem = std::make_unique<timer_member>(tp, period, cb);
+    // timer_member *tim_mem = new timer_member(tp, period, cb);
     register_scheduler_table(*tim_mem);
 }
 
 void my_timer::register_timer(const predicate &pred, const millisecs &period, const timer_callback &cb)
 {
-    // std::cout << "Timer Type 4\n";
     std::this_thread::sleep_for(std::chrono::milliseconds(DELAY_DEBT));
     // Add to timer handler table with event type
-    // std::unique_ptr<timer_member> tim_mem = std::make_unique<timer_member>(pred, period, cb);
-    timer_member *tim_mem = new timer_member(pred, period, cb);
+    std::unique_ptr<timer_member> tim_mem = std::make_unique<timer_member>(pred, period, cb);
+    // timer_member *tim_mem = new timer_member(pred, period, cb);
     register_scheduler_table(*tim_mem);
 }
 
@@ -69,9 +66,6 @@ void my_timer::register_scheduler_table(timer_member &tim_mem)
 void my_timer::compute_deadline(timer_member &tim_mem)
 {
     // We should save the deadlines related to each specific timer members.
-    // std::cout << "Trying to take mutex in main thread\n";
-    // std::lock_guard<std::mutex> guard(timer_mutex);
-    // std::cout << "Mutex has been taken from timer thread\n";
 
     switch (tim_mem.timer_type)
     {
@@ -123,7 +117,7 @@ void my_timer::compute_deadline(timer_member &tim_mem)
     }
 
     default:
-        // std::cout << "Unknown timer type\n";
+        std::cout << "Unknown timer type\n";
         break;
     }
 }
@@ -176,12 +170,10 @@ void my_timer::decide_timers_attitude(void)
         auto timepoint = tim_mem->get_member_timepoint();
         auto tp_ms = timepoint.time_since_epoch().count();
         auto threshold_ms = (tp_ms - time_epoch) / divider;
-        // std::cout << "threshold_ms: " << threshold_ms << "\n";
         auto period = tim_mem->get_member_period();
         tim_mem->period_cnt++;
         auto deadline_ms = tim_mem->period_cnt * period.count();
         tim_mem->set_member_deadline(deadline_ms);
-        // std::cout << "deadline_ms: " << deadline_ms << "\n";
 
         // Check the values' size. If threshold_ms smaller than deadline_ms, remove the timer from table
         if (threshold_ms <= deadline_ms)
@@ -203,7 +195,6 @@ void my_timer::decide_timers_attitude(void)
         // Check the predicate's value. If it is false, remove the timer from table
         if (!pred())
         {
-            // std::cout << "pred returned false\n";
             // Remove the timer from table
             schedule_table.erase(schedule_table.begin());
         }
@@ -214,8 +205,6 @@ void my_timer::decide_timers_attitude(void)
             tim_mem->period_cnt++;
             auto deadline_ms = tim_mem->period_cnt * period.count();
             tim_mem->set_member_deadline(deadline_ms);
-            // std::cout << "deadline_ms: " << deadline_ms << "\n";
-            // std::cout << "pred returned true\n";
             timer_sem.give();
         }
 
@@ -223,7 +212,7 @@ void my_timer::decide_timers_attitude(void)
     }
 
     default:
-        // std::cout << "Unknown timer type\n";
+        std::cout << "Unknown timer type\n";
         break;
     }
 }
@@ -233,7 +222,6 @@ void my_timer::handle_timer_events(void)
     // This is the scope that schedules the timer callback deadlines
     long long time_past = DELAY_DEBT;
 
-    // std::cout << "Hello from timer thread\n";
     while (!done)
     {
         while (!schedule_table.empty())
@@ -241,20 +229,15 @@ void my_timer::handle_timer_events(void)
             timer_sem.take();
             timer_member tim_mem = schedule_table.front();
             // Wait for signals that will indicate the timer members are ready.
-            // tim_mem.timer_sem.take();
-            // std::cout << "gelen deadline " << tim_mem.get_member_deadline()<< "\n";
             auto ms_sleep = compute_sleep(tim_mem.get_member_deadline(), time_past);
-            // std::cout << "ms_sleep: " << ms_sleep << "\n";
             // Sleep the thread with short interval and check out whether the timer queue changes or not.
             std::chrono::duration<double, std::milli> sleep(ms_sleep / SLEEP_CNT);
 
             for (size_t i = 1; i <= SLEEP_CNT; i++)
             {
-                // std::cout << "sleep: " << sleep.count() << "\n";
                 // get size of the timer queue
                 auto old_size = schedule_table.size();
                 std::this_thread::sleep_for(sleep);
-                // std::cout << "sleep: " << sleep.count() << "\n";
                 auto new_size = schedule_table.size();
 
                 // check the queue whether it is changed or not.
