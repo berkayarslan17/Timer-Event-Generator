@@ -120,13 +120,12 @@ public:
     void handle_timer_events(void);
 
 private:
-    std::vector<timer_member> schedule_table;
+    std::vector<timer_member> scheduler_table;
     std::mutex timer_mutex;
     semaphore timer_sem;
     std::thread *runnable;
     std::atomic<bool> done;
     timepoint time_now;
-    bool ready;
     long long time_epoch;
     long long divider;
 };
