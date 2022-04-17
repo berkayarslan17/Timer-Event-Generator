@@ -115,7 +115,7 @@ public:
 
     void register_scheduler_table(timer_member &tim_mem);
     void prescheduler(timer_member &tim_mem);
-    void sort_by_deadline(void);
+    void sort_scheduler_table(void);
     void scheduler(void);
     void handle_timer_events(void);
 

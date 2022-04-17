@@ -21,8 +21,7 @@ void my_timer::register_timer(const timepoint &tp, const timer_callback &cb)
 {
     std::this_thread::sleep_for(std::chrono::milliseconds(DELAY_DEBT));
     // Add to timer handler table with event type
-    std::unique_ptr<timer_member> tim_mem = std::make_unique<timer_member>(tp, cb);
-    // timer_member *tim_mem = new timer_member(tp, cb);
+    timer_member *tim_mem = new timer_member(tp, cb);
     register_scheduler_table(*tim_mem);
 }
 
@@ -30,8 +29,7 @@ void my_timer::register_timer(const millisecs &period, const timer_callback &cb)
 {
     std::this_thread::sleep_for(std::chrono::milliseconds(DELAY_DEBT));
     // Add to timer handler table with event type
-    std::unique_ptr<timer_member> tim_mem = std::make_unique<timer_member>(period, cb);
-    // timer_member *tim_mem = new timer_member(period, cb);
+    timer_member *tim_mem = new timer_member(period, cb);
     register_scheduler_table(*tim_mem);
 }
 
@@ -39,8 +37,7 @@ void my_timer::register_timer(const timepoint &tp, const millisecs &period, cons
 {
     std::this_thread::sleep_for(std::chrono::milliseconds(DELAY_DEBT));
     // Add to timer handler table with event type
-    std::unique_ptr<timer_member> tim_mem = std::make_unique<timer_member>(tp, period, cb);
-    // timer_member *tim_mem = new timer_member(tp, period, cb);
+    timer_member *tim_mem = new timer_member(tp, period, cb);
     register_scheduler_table(*tim_mem);
 }
 
@@ -48,8 +45,7 @@ void my_timer::register_timer(const predicate &pred, const millisecs &period, co
 {
     std::this_thread::sleep_for(std::chrono::milliseconds(DELAY_DEBT));
     // Add to timer handler table with event type
-    std::unique_ptr<timer_member> tim_mem = std::make_unique<timer_member>(pred, period, cb);
-    // timer_member *tim_mem = new timer_member(pred, period, cb);
+    timer_member *tim_mem = new timer_member(pred, period, cb);
     register_scheduler_table(*tim_mem);
 }
 
@@ -59,7 +55,7 @@ void my_timer::register_scheduler_table(timer_member &tim_mem)
     prescheduler(tim_mem);
     std::lock_guard<std::mutex> lock(timer_mutex);
     schedule_table.push_back(tim_mem);
-    sort_by_deadline();
+    sort_scheduler_table();
 }
 
 // Find the earliest deadline among the timer member variables.
@@ -122,7 +118,7 @@ void my_timer::prescheduler(timer_member &tim_mem)
     }
 }
 
-void my_timer::sort_by_deadline(void)
+void my_timer::sort_scheduler_table(void)
 {
     // Sort the deadline vector, return the earliest deadline.
     if (schedule_table.size() > 1)
@@ -255,7 +251,7 @@ void my_timer::handle_timer_events(void)
                     tim_mem.get_member_cb()();
                     std::lock_guard<std::mutex> lock(timer_mutex);
                     scheduler();
-                    sort_by_deadline();
+                    sort_scheduler_table();
                 }
             }
         }
