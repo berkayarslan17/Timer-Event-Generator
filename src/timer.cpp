@@ -56,14 +56,14 @@ void my_timer::register_timer(const predicate &pred, const millisecs &period, co
 // Find the earliest deadline among the timer member variables.
 void my_timer::register_scheduler_table(timer_member &tim_mem)
 {
-    compute_deadline(tim_mem);
+    prescheduler(tim_mem);
     std::lock_guard<std::mutex> lock(timer_mutex);
     schedule_table.push_back(tim_mem);
     sort_by_deadline();
 }
 
 // Find the earliest deadline among the timer member variables.
-void my_timer::compute_deadline(timer_member &tim_mem)
+void my_timer::prescheduler(timer_member &tim_mem)
 {
     // We should save the deadlines related to each specific timer members.
 
@@ -138,7 +138,7 @@ long long compute_sleep(long long sleep, long long time_past)
     return result;
 }
 
-void my_timer::decide_timers_attitude(void)
+void my_timer::scheduler(void)
 {
     auto tim_mem = schedule_table.begin();
     switch (tim_mem->timer_type)
@@ -254,7 +254,7 @@ void my_timer::handle_timer_events(void)
                     // Trigger the callback function
                     tim_mem.get_member_cb()();
                     std::lock_guard<std::mutex> lock(timer_mutex);
-                    decide_timers_attitude();
+                    scheduler();
                     sort_by_deadline();
                 }
             }

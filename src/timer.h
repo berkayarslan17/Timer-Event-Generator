@@ -114,9 +114,9 @@ public:
     void register_timer(const predicate &pred, const millisecs &period, const timer_callback &cb);
 
     void register_scheduler_table(timer_member &tim_mem);
-    void compute_deadline(timer_member &tim_mem);
+    void prescheduler(timer_member &tim_mem);
     void sort_by_deadline(void);
-    void decide_timers_attitude(void);
+    void scheduler(void);
     void handle_timer_events(void);
 
 private:
