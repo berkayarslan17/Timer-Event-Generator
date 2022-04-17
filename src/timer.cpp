@@ -40,7 +40,6 @@ my_timer::~my_timer()
  */
 void my_timer::register_timer(const timepoint &tp, const timer_callback &cb)
 {
-    std::this_thread::sleep_for(std::chrono::milliseconds(DELAY_DEBT));
     // Add to timer handler table with event type
     timer_member *tim_mem = new timer_member(tp, cb);
     register_scheduler_table(*tim_mem);
@@ -56,7 +55,6 @@ void my_timer::register_timer(const timepoint &tp, const timer_callback &cb)
  */
 void my_timer::register_timer(const millisecs &period, const timer_callback &cb)
 {
-    std::this_thread::sleep_for(std::chrono::milliseconds(DELAY_DEBT));
     // Add to timer handler table with event type
     timer_member *tim_mem = new timer_member(period, cb);
     register_scheduler_table(*tim_mem);
@@ -73,7 +71,6 @@ void my_timer::register_timer(const millisecs &period, const timer_callback &cb)
  */
 void my_timer::register_timer(const timepoint &tp, const millisecs &period, const timer_callback &cb)
 {
-    std::this_thread::sleep_for(std::chrono::milliseconds(DELAY_DEBT));
     // Add to timer handler table with event type
     timer_member *tim_mem = new timer_member(tp, period, cb);
     register_scheduler_table(*tim_mem);
@@ -90,7 +87,6 @@ void my_timer::register_timer(const timepoint &tp, const millisecs &period, cons
  */
 void my_timer::register_timer(const predicate &pred, const millisecs &period, const timer_callback &cb)
 {
-    std::this_thread::sleep_for(std::chrono::milliseconds(DELAY_DEBT));
     // Add to timer handler table with event type
     timer_member *tim_mem = new timer_member(pred, period, cb);
     register_scheduler_table(*tim_mem);
@@ -299,7 +295,7 @@ void my_timer::scheduler(void)
  */
 void my_timer::handle_timer_events(void)
 {
-    long long time_past = DELAY_DEBT;
+    long long time_past = 0;
 
     while (!done)
     {

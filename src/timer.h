@@ -12,7 +12,6 @@
 #include <condition_variable>
 
 #define SLEEP_CNT 10
-#define DELAY_DEBT 10
 
 using CLOCK = std::chrono::high_resolution_clock;
 using timer_callback = std::function<void()>;
